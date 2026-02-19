@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "amocrm-mcp"
+version = "0.1.0"
+description = "MCP server for amoCRM (Kommo) API v4 — 36 tools for leads, contacts, companies, tasks, pipelines, and more"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    { name = "cAIborg-ai" },
+]
+keywords = ["mcp", "amocrm", "kommo", "crm", "model-context-protocol"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    "fastmcp",
+    "httpx",
+    "pydantic",
+    "pydantic-settings",
+    "aiolimiter",
+]
+
+[project.urls]
+Homepage = "https://github.com/cAIborg-ai/amocrm-mcp"
+Repository = "https://github.com/cAIborg-ai/amocrm-mcp"
+Issues = "https://github.com/cAIborg-ai/amocrm-mcp/issues"
+
+[project.scripts]
+amocrm-mcp = "amocrm_mcp.server:main"
+
+[tool.setuptools.packages.find]
+include = ["amocrm_mcp*"]
