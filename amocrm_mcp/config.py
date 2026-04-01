@@ -22,7 +22,10 @@ class Config(BaseSettings):
         default=".amo_tokens.json",
         description="Path for token persistence file",
     )
-    transport: str = Field(default="stdio", description="Transport protocol: stdio or sse")
+    transport: str = Field(
+        default="stdio",
+        description="Transport protocol: stdio, sse, http, or streamable-http",
+    )
     port: int = Field(default=8000, description="Port for SSE transport")
 
     @property

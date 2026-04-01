@@ -1,14 +1,4 @@
-"""MCP server entrypoint: compose Config + AuthManager + AmoClient + FastMCP (FR-24, FR-29, FR-30).
-
-Runtime composition:
-1. main() loads Config (env vars via Pydantic BaseSettings)
-2. Initializes AuthManager (loads persisted tokens or env fallback)
-3. Creates AmoClient with AuthManager + RateLimitedTransport
-4. Creates FastMCP instance with AmoClient as context dependency
-5. Imports src/tools/__init__.py triggering @mcp.tool() decorator registration
-6. Asserts 36 tools registered
-7. Runs FastMCP with configured transport (stdio default, sse via config)
-"""
+"""MCP server entrypoint for stdio and HTTP transports."""
 
 from __future__ import annotations
 
@@ -17,6 +7,7 @@ import sys
 from typing import Any, Callable
 
 from fastmcp import FastMCP
+from fastmcp.server.lifespan import lifespan
 
 from amocrm_mcp.auth import AuthError, RefreshTokenExpiredError
 from amocrm_mcp.client import AmoAPIError, AmoClient, error_response
@@ -25,9 +16,56 @@ logger = logging.getLogger("amocrm_mcp.server")
 
 EXPECTED_TOOL_COUNT = 39
 
-mcp = FastMCP("amoCRM MCP Server")
-
 _client: AmoClient | None = None
+_tools_registered = False
+
+
+def _configure_logging() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(name)s %(levelname)s %(message)s",
+    )
+
+
+def ensure_tools_registered() -> None:
+    """Import tool modules exactly once to trigger @mcp.tool() registration."""
+    global _tools_registered
+    if _tools_registered:
+        return
+
+    import amocrm_mcp.tools  # noqa: F401 -- triggers @mcp.tool() registration
+
+    _tools_registered = True
+
+
+@lifespan
+async def runtime_lifespan(_server: FastMCP[Any]):
+    """Initialize auth/client resources for tool execution."""
+    global _client
+
+    _configure_logging()
+
+    from amocrm_mcp.auth import AuthManager
+    from amocrm_mcp.config import Config
+
+    config = Config()
+    logger.info("Configuration loaded for subdomain: %s", config.subdomain)
+
+    auth = AuthManager(config)
+    logger.info("AuthManager initialized")
+
+    _client = AmoClient(auth=auth, base_url=config.base_url)
+    logger.info("AmoClient created with base_url: %s", config.base_url)
+
+    try:
+        yield {"config": config}
+    finally:
+        if _client is not None:
+            await _client.close()
+        _client = None
+
+
+mcp = FastMCP("amoCRM MCP Server", lifespan=runtime_lifespan)
 
 
 async def execute_tool(fn: Callable[..., dict], *args: Any, **kwargs: Any) -> dict:
@@ -68,28 +106,12 @@ def main() -> None:
 
 
 async def _async_main() -> None:
-    """Async composition and server startup."""
-    global _client
-
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(name)s %(levelname)s %(message)s",
-    )
-
+    """Async startup for local stdio/HTTP transports."""
     from amocrm_mcp.config import Config
 
+    _configure_logging()
     config = Config()
-    logger.info("Configuration loaded for subdomain: %s", config.subdomain)
-
-    from amocrm_mcp.auth import AuthManager
-
-    auth = AuthManager(config)
-    logger.info("AuthManager initialized")
-
-    _client = AmoClient(auth=auth, base_url=config.base_url)
-    logger.info("AmoClient created with base_url: %s", config.base_url)
-
-    import amocrm_mcp.tools  # noqa: F401 -- triggers @mcp.tool() registration
+    ensure_tools_registered()
 
     registered_tools = await mcp.list_tools()
     tool_count = len(registered_tools)
@@ -108,15 +130,24 @@ async def _async_main() -> None:
         config.transport,
     )
 
-    try:
-        if config.transport == "sse":
-            await mcp.run_http_async(
-                transport="sse",
-                host="0.0.0.0",
-                port=config.port,
-            )
-        else:
-            await mcp.run_stdio_async()
-    finally:
-        await _client.close()
-        _client = None
+    if config.transport == "sse":
+        await mcp.run_http_async(
+            transport="sse",
+            host="0.0.0.0",
+            port=config.port,
+        )
+    elif config.transport in ("http", "streamable-http"):
+        await mcp.run_http_async(
+            transport="streamable-http",
+            host="0.0.0.0",
+            port=config.port,
+            path="/mcp",
+        )
+    else:
+        await mcp.run_stdio_async()
+
+
+def build_http_app(path: str = "/mcp"):
+    """Build an ASGI app for deployment platforms like Vercel."""
+    ensure_tools_registered()
+    return mcp.http_app(path=path, transport="streamable-http")

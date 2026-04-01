@@ -12,7 +12,7 @@ Built with [FastMCP](https://github.com/jlowin/fastmcp). Works with Claude Deskt
 - **Rate limiting** — 7 req/s with automatic 429 backoff and jitter
 - **HAL+JSON normalization** — strips `_links`, flattens `_embedded`
 - **Consistent response envelopes** — `{data, pagination}` or `{error, status_code, detail}`
-- **stdio and SSE** transports
+- **stdio, SSE, and streamable-http** transports
 
 ## Quick Start
 
@@ -45,6 +45,9 @@ python -m amocrm_mcp
 
 # SSE transport
 AMO_TRANSPORT=sse AMO_PORT=8000 python -m amocrm_mcp
+
+# Streamable HTTP transport
+AMO_TRANSPORT=streamable-http AMO_PORT=8000 python -m amocrm_mcp
 ```
 
 ### Claude Desktop config
@@ -61,10 +64,51 @@ Add to `claude_desktop_config.json`:
         "AMO_SUBDOMAIN": "your-subdomain",
         "AMO_ACCESS_TOKEN": "your-token"
       }
+      }
     }
-  }
 }
 ```
+
+## Vercel Deployment
+
+Current production deployment for `helloevospru`:
+
+- MCP endpoint: `https://amocrm-mcp-helloevospru.vercel.app/mcp`
+- Healthcheck: `https://amocrm-mcp-helloevospru.vercel.app/healthz`
+
+This repository is set up for the simplest multi-account operating model:
+
+- **one Vercel project = one amoCRM account**
+- store amoCRM credentials in Vercel project environment variables
+- connect Codex to the project-specific `/mcp` URL
+
+### Deploy a new amoCRM account
+
+1. Create a new Vercel project from this repository.
+2. Add production environment variables:
+   - `AMO_SUBDOMAIN=<your amoCRM subdomain>`
+   - `AMO_ACCESS_TOKEN=<your long-lived token>`
+   - leave `AMO_CLIENT_ID`, `AMO_CLIENT_SECRET`, and `AMO_REFRESH_TOKEN` empty if you use long-lived token mode
+3. Deploy to production:
+
+```bash
+npx vercel link --project <new-project-name>
+npx vercel env add AMO_SUBDOMAIN production --value <subdomain>
+npx vercel env add AMO_ACCESS_TOKEN production --value <long-lived-token>
+npx vercel deploy --prod -y
+```
+
+4. Use the project URL in Codex:
+
+```toml
+[mcp_servers.amocrm_<account_name>]
+url = "https://<your-project>.vercel.app/mcp"
+```
+
+Recommended naming:
+
+- Vercel project: `amocrm-mcp-<account>`
+- Codex server key: `amocrm_<account>`
 
 ## Tools
 

@@ -10,6 +10,7 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+.vercel/
 
 # IDE
 .idea/
@@ -18,3 +19,4 @@ build/
 
 # OS
 .DS_Store
+.vercel
