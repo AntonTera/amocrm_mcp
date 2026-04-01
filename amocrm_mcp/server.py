@@ -23,7 +23,7 @@ from amocrm_mcp.client import AmoAPIError, AmoClient, error_response
 
 logger = logging.getLogger("amocrm_mcp.server")
 
-EXPECTED_TOOL_COUNT = 36
+EXPECTED_TOOL_COUNT = 39
 
 mcp = FastMCP("amoCRM MCP Server")
 
@@ -91,14 +91,14 @@ async def _async_main() -> None:
 
     import amocrm_mcp.tools  # noqa: F401 -- triggers @mcp.tool() registration
 
-    registered_tools = await mcp.get_tools()
+    registered_tools = await mcp.list_tools()
     tool_count = len(registered_tools)
     if tool_count != EXPECTED_TOOL_COUNT:
         logger.error(
             "Expected %d tools registered, got %d. Registered: %s",
             EXPECTED_TOOL_COUNT,
             tool_count,
-            sorted(registered_tools.keys()),
+            sorted(tool.name for tool in registered_tools),
         )
         sys.exit(1)
 

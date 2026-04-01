@@ -20,6 +20,22 @@ MAX_CUSTOM_FIELDS_PER_ENTITY = 40
 ENTITY_TYPES_FOR_NOTES = ("leads", "contacts", "companies", "customers")
 ENTITY_TYPES_FOR_EVENTS = ("lead", "contact", "company", "customer", "task")
 LINKABLE_ENTITY_TYPES = ("leads", "contacts", "companies", "customers")
+CUSTOM_FIELD_ENTITY_TYPES = ("leads", "contacts", "companies", "customers", "segments")
+CUSTOM_FIELD_SUPPORTED_TYPES = (
+    "text",
+    "numeric",
+    "textarea",
+    "price",
+    "checkbox",
+    "url",
+    "date",
+    "date_time",
+    "birthday",
+    "select",
+    "multiselect",
+    "radiobutton",
+)
+CUSTOM_FIELD_ENUM_TYPES = ("select", "multiselect", "radiobutton")
 
 
 # ---------------------------------------------------------------------------
@@ -44,6 +60,24 @@ class CustomFieldInput(BaseModel):
 
     field_id: int
     values: list[dict[str, Any]]
+
+
+class CustomFieldEnumInput(BaseModel):
+    """Allowed enum option for select-like custom fields."""
+
+    value: str = Field(description="Displayed enum value")
+    sort: int = Field(description="Sort order within enum values")
+    code: str | None = Field(
+        default=None,
+        description="Optional symbolic enum code",
+    )
+
+
+class RequiredStatusInput(BaseModel):
+    """Required status configuration for contacts/companies/leads/customers."""
+
+    status_id: int = Field(description="Status ID that requires this field")
+    pipeline_id: int = Field(description="Pipeline ID for the required status")
 
 
 # ---------------------------------------------------------------------------
@@ -509,6 +543,181 @@ class AccountListCustomFieldsInput(PaginationMixin):
     entity_type: str = Field(
         description="Entity type to get custom fields for (leads, contacts, companies, customers, segments, catalogs)"
     )
+
+
+class AccountCreateCustomFieldInput(BaseModel):
+    """Input for account_create_custom_field tool."""
+
+    entity_type: str = Field(
+        description="Entity type to create the field for (leads, contacts, companies, customers, segments)"
+    )
+    name: str = Field(description="Custom field name")
+    type: str = Field(
+        description="Field type (text, numeric, textarea, price, checkbox, url, date, date_time, birthday, select, multiselect, radiobutton)"
+    )
+    code: str | None = Field(
+        default=None,
+        description="Optional field code for API updates by code",
+    )
+    sort: int | None = Field(
+        default=None,
+        description="Optional sort order in the field group",
+    )
+    group_id: str | None = Field(
+        default=None,
+        description="Optional custom field group ID",
+    )
+    is_api_only: bool | None = Field(
+        default=None,
+        description="Whether the field should be editable only via API",
+    )
+    required_statuses: list[RequiredStatusInput] | None = Field(
+        default=None,
+        description="Optional list of statuses where the field becomes required",
+    )
+    remind: Literal["never", "day", "week", "month"] | None = Field(
+        default=None,
+        description="Reminder schedule for birthday fields",
+    )
+    enums: list[CustomFieldEnumInput] | None = Field(
+        default=None,
+        description="Enum values for select, multiselect, and radiobutton fields",
+    )
+
+    @field_validator("entity_type")
+    @classmethod
+    def validate_entity_type(cls, v: str) -> str:
+        if v not in CUSTOM_FIELD_ENTITY_TYPES:
+            msg = f"entity_type must be one of {CUSTOM_FIELD_ENTITY_TYPES}, got '{v}'"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("type")
+    @classmethod
+    def validate_field_type(cls, v: str) -> str:
+        if v not in CUSTOM_FIELD_SUPPORTED_TYPES:
+            msg = f"type must be one of {CUSTOM_FIELD_SUPPORTED_TYPES}, got '{v}'"
+            raise ValueError(msg)
+        return v
+
+    @model_validator(mode="after")
+    def validate_type_specific_requirements(self) -> "AccountCreateCustomFieldInput":
+        if self.type in CUSTOM_FIELD_ENUM_TYPES and not self.enums:
+            msg = f"enums are required for field type '{self.type}'"
+            raise ValueError(msg)
+        if self.type not in CUSTOM_FIELD_ENUM_TYPES and self.enums is not None:
+            msg = f"enums are only supported for field types {CUSTOM_FIELD_ENUM_TYPES}"
+            raise ValueError(msg)
+        if self.type == "birthday" and self.remind is None:
+            self.remind = "never"
+        if self.type != "birthday" and self.remind is not None:
+            msg = "remind is only supported for field type 'birthday'"
+            raise ValueError(msg)
+        return self
+
+
+class AccountUpdateCustomFieldInput(BaseModel):
+    """Input for account_update_custom_field tool."""
+
+    entity_type: str = Field(
+        description="Entity type of the field (leads, contacts, companies, customers, segments)"
+    )
+    id: int = Field(description="Custom field ID")
+    name: str | None = Field(default=None, description="Custom field name")
+    type: str | None = Field(
+        default=None,
+        description="Field type (text, numeric, textarea, price, checkbox, url, date, date_time, birthday, select, multiselect, radiobutton)",
+    )
+    code: str | None = Field(
+        default=None,
+        description="Optional field code for API updates by code",
+    )
+    sort: int | None = Field(
+        default=None,
+        description="Optional sort order in the field group",
+    )
+    group_id: str | None = Field(
+        default=None,
+        description="Optional custom field group ID",
+    )
+    is_api_only: bool | None = Field(
+        default=None,
+        description="Whether the field should be editable only via API",
+    )
+    required_statuses: list[RequiredStatusInput] | None = Field(
+        default=None,
+        description="Optional list of statuses where the field becomes required",
+    )
+    remind: Literal["never", "day", "week", "month"] | None = Field(
+        default=None,
+        description="Reminder schedule for birthday fields",
+    )
+    enums: list[CustomFieldEnumInput] | None = Field(
+        default=None,
+        description="Enum values for select, multiselect, and radiobutton fields",
+    )
+
+    @field_validator("entity_type")
+    @classmethod
+    def validate_entity_type(cls, v: str) -> str:
+        if v not in CUSTOM_FIELD_ENTITY_TYPES:
+            msg = f"entity_type must be one of {CUSTOM_FIELD_ENTITY_TYPES}, got '{v}'"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("type")
+    @classmethod
+    def validate_field_type(cls, v: str | None) -> str | None:
+        if v is not None and v not in CUSTOM_FIELD_SUPPORTED_TYPES:
+            msg = f"type must be one of {CUSTOM_FIELD_SUPPORTED_TYPES}, got '{v}'"
+            raise ValueError(msg)
+        return v
+
+    @model_validator(mode="after")
+    def validate_payload(self) -> "AccountUpdateCustomFieldInput":
+        if (
+            self.name is None
+            and self.type is None
+            and self.code is None
+            and self.sort is None
+            and self.group_id is None
+            and self.is_api_only is None
+            and self.required_statuses is None
+            and self.remind is None
+            and self.enums is None
+        ):
+            msg = "At least one field update must be provided"
+            raise ValueError(msg)
+        effective_type = self.type
+        if effective_type in CUSTOM_FIELD_ENUM_TYPES and self.enums is not None and len(self.enums) == 0:
+            msg = f"enums cannot be empty for field type '{effective_type}'"
+            raise ValueError(msg)
+        if effective_type not in CUSTOM_FIELD_ENUM_TYPES and self.enums is not None and self.type is not None:
+            msg = f"enums are only supported for field types {CUSTOM_FIELD_ENUM_TYPES}"
+            raise ValueError(msg)
+        if effective_type == "birthday" and self.remind is None and self.type is not None:
+            self.remind = "never"
+        if effective_type != "birthday" and self.remind is not None and self.type is not None:
+            msg = "remind is only supported for field type 'birthday'"
+            raise ValueError(msg)
+        return self
+
+
+class AccountDeleteCustomFieldInput(BaseModel):
+    """Input for account_delete_custom_field tool."""
+
+    entity_type: str = Field(
+        description="Entity type of the field (leads, contacts, companies, customers, segments)"
+    )
+    id: int = Field(description="Custom field ID")
+
+    @field_validator("entity_type")
+    @classmethod
+    def validate_entity_type(cls, v: str) -> str:
+        if v not in CUSTOM_FIELD_ENTITY_TYPES:
+            msg = f"entity_type must be one of {CUSTOM_FIELD_ENTITY_TYPES}, got '{v}'"
+            raise ValueError(msg)
+        return v
 
 
 # ---------------------------------------------------------------------------

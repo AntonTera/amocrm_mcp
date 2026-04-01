@@ -7,7 +7,11 @@ from pydantic_settings import BaseSettings
 class Config(BaseSettings):
     """Environment-based configuration for amoCRM MCP server (FR-1, ADR-006)."""
 
-    model_config = {"env_prefix": "AMO_"}
+    model_config = {
+        "env_prefix": "AMO_",
+        "env_file": ".env",
+        "env_file_encoding": "utf-8",
+    }
 
     subdomain: str = Field(description="amoCRM account subdomain")
     client_id: str = Field(default="", description="OAuth client ID")

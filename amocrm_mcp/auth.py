@@ -39,11 +39,23 @@ class AuthManager:
         self._token_file = Path(config.token_file)
         self._load_persisted_tokens()
 
+    @property
+    def can_refresh(self) -> bool:
+        """Return True when classic OAuth refresh is fully configured."""
+        return bool(
+            self._config.client_id
+            and self._config.client_secret
+            and self._refresh_token_value
+        )
+
     def _load_persisted_tokens(self) -> None:
         """Load tokens from disk if the file exists and contains valid JSON.
 
         Persisted tokens take precedence over environment variable values.
         """
+        if not self.can_refresh:
+            logger.info("Refresh token flow is not configured, skipping persisted token load")
+            return
         if not self._token_file.exists():
             logger.info("No persisted token file found at %s, using env seed", self._token_file)
             return
@@ -93,6 +105,11 @@ class AuthManager:
         On success, persists new tokens to disk.
         On invalid_grant (expired refresh token), raises RefreshTokenExpiredError.
         """
+        if not self.can_refresh:
+            raise AuthError(
+                "Refresh token flow is not configured. "
+                "Use a valid long-lived token in AMO_ACCESS_TOKEN or provide OAuth refresh credentials."
+            )
         url = f"https://{self._config.subdomain}.kommo.com/oauth2/access_token"
         body = {
             "client_id": self._config.client_id,

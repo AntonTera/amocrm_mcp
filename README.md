@@ -1,13 +1,14 @@
 # amoCRM MCP Server
 
-MCP server for [amoCRM](https://www.amocrm.ru/) (Kommo) API v4. Exposes 36 tools for leads, contacts, companies, tasks, notes, pipelines, associations, analytics, and more.
+MCP server for [amoCRM](https://www.amocrm.ru/) (Kommo) API v4. Exposes tools for leads, contacts, companies, tasks, notes, pipelines, associations, analytics, and custom fields.
 
 Built with [FastMCP](https://github.com/jlowin/fastmcp). Works with Claude Desktop, Cursor, and any MCP-compatible client.
 
 ## Features
 
-- **36 MCP tools** across 11 domains (leads, contacts, companies, tasks, notes, pipelines, associations, account, batch, unsorted, analytics)
+- **39 MCP tools** across 11 domains (leads, contacts, companies, tasks, notes, pipelines, associations, account, batch, unsorted, analytics)
 - **OAuth 2.0** token refresh with disk persistence
+- **Long-lived token mode** for simpler single-account deployments
 - **Rate limiting** — 7 req/s with automatic 429 backoff and jitter
 - **HAL+JSON normalization** — strips `_links`, flattens `_embedded`
 - **Consistent response envelopes** — `{data, pagination}` or `{error, status_code, detail}`
@@ -76,7 +77,7 @@ Add to `claude_desktop_config.json`:
 | **Notes** | `notes_list`, `notes_create` | Notes on entities |
 | **Pipelines** | `pipelines_list`, `pipelines_get`, `pipelines_list_statuses` | Pipeline & status info |
 | **Associations** | `associations_get_linked`, `associations_link_entities` | Entity relationships |
-| **Account** | `account_get`, `account_list_users`, `account_list_custom_fields` | Account metadata |
+| **Account** | `account_get`, `account_list_users`, `account_list_custom_fields`, `account_create_custom_field`, `account_update_custom_field`, `account_delete_custom_field` | Account metadata and custom field management |
 | **Batch** | `batch_create_leads`, `batch_create_contacts`, `batch_update_leads` | Bulk operations |
 | **Analytics** | `analytics_get_events`, `analytics_get_pipeline_analytics`, +1 | CRM analytics |
 | **Unsorted** | `unsorted_list`, `unsorted_accept`, `unsorted_reject` | Unsorted inbox |

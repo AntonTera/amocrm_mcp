@@ -60,7 +60,7 @@ class RateLimitedTransport(httpx.AsyncBaseTransport):
         response = await self._inner.handle_async_request(request)
 
         # 401 -> refresh token and retry once
-        if response.status_code == 401:
+        if response.status_code == 401 and self._auth.can_refresh:
             logger.info("Received 401, attempting token refresh")
             await response.aread()
             await response.aclose()
@@ -120,6 +120,12 @@ class AmoClient:
             headers={"Content-Type": "application/json"},
         )
 
+    def _normalize_path(self, path: str) -> str:
+        """Accept either '/resource' or '/api/v4/resource' tool paths."""
+        if path.startswith("/api/v4/"):
+            return path[len("/api/v4"):]
+        return path
+
     async def close(self) -> None:
         await self._client.aclose()
 
@@ -137,7 +143,7 @@ class AmoClient:
         """
         response = await self._client.request(
             method=method,
-            url=path,
+            url=self._normalize_path(path),
             params=params,
             json=json_data,
         )
