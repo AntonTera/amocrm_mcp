@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from amocrm_mcp.client import AmoAPIError, build_filters, error_response, success_response
+from amocrm_mcp.client import AmoAPIError, build_filters, error_response, has_next_page, success_response
 from amocrm_mcp.models.schemas import (
     AnalyticsGetEventsInput,
     AnalyticsGetPipelineAnalyticsInput,
@@ -53,7 +53,7 @@ async def analytics_get_events(input: AnalyticsGetEventsInput) -> dict:
         events = data.get("events", [])
         pagination = {
             "current_page": input.page,
-            "has_next": "next" in data if isinstance(data, dict) else False,
+            "has_next": has_next_page(data),
         }
         return success_response(events, pagination)
 
@@ -118,9 +118,7 @@ async def analytics_get_pipeline_analytics(
     async def _execute(client):
         all_leads: list[dict] = []
         page = 1
-        has_next = True
-
-        while has_next:
+        while True:
             params: dict = {
                 "page": page,
                 "limit": 250,
@@ -138,8 +136,11 @@ async def analytics_get_pipeline_analytics(
                 "GET", "/api/v4/leads", params=params,
             )
             leads = data.get("leads", [])
+            if not leads:
+                break
             all_leads.extend(leads)
-            has_next = "next" in data if isinstance(data, dict) else False
+            if not has_next_page(data):
+                break
             page += 1
 
         groups: dict[str, int] = defaultdict(int)

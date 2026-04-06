@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from amocrm_mcp.client import AmoAPIError, error_response, success_response
+from amocrm_mcp.client import AmoAPIError, error_response, has_next_page, success_response
 from amocrm_mcp.models.schemas import (
     AccountCreateCustomFieldInput,
     AccountDeleteCustomFieldInput,
@@ -51,7 +51,7 @@ async def account_list_users(input: AccountListUsersInput) -> dict:
         users = data.get("users", [])
         pagination = {
             "current_page": input.page,
-            "has_next": "next" in data if isinstance(data, dict) else False,
+            "has_next": has_next_page(data),
         }
         return success_response(users, pagination)
 
@@ -72,7 +72,7 @@ async def account_list_custom_fields(input: AccountListCustomFieldsInput) -> dic
         custom_fields = data.get("custom_fields", [])
         pagination = {
             "current_page": input.page,
-            "has_next": "next" in data if isinstance(data, dict) else False,
+            "has_next": has_next_page(data),
         }
         return success_response(custom_fields, pagination)
 

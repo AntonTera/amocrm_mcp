@@ -14,6 +14,7 @@ logger = logging.getLogger("amocrm_mcp.client")
 MAX_429_RETRIES = 5
 RATE_LIMIT_MAX_RATE = 7
 RATE_LIMIT_TIME_PERIOD = 1
+HAL_HAS_NEXT_KEY = "__hal_has_next__"
 
 HTTP_STATUS_MESSAGES: dict[int, str] = {
     400: "Bad request. Check the request parameters and payload format.",
@@ -186,6 +187,7 @@ def normalize_response(data: Any) -> Any:
 
     Recursively processes dicts and lists. Merges _embedded children into
     the parent dict. Removes _links at every level.
+    Preserves a root-level pagination hint when a HAL `next` link is present.
     """
     if isinstance(data, list):
         return [normalize_response(item) for item in data]
@@ -194,6 +196,8 @@ def normalize_response(data: Any) -> Any:
         return data
 
     result: dict[str, Any] = {}
+    links = data.get("_links")
+    has_next_link = isinstance(links, dict) and "next" in links
 
     for key, value in data.items():
         if key == "_links":
@@ -205,7 +209,15 @@ def normalize_response(data: Any) -> Any:
             continue
         result[key] = normalize_response(value)
 
+    if has_next_link:
+        result[HAL_HAS_NEXT_KEY] = True
+
     return result
+
+
+def has_next_page(data: Any) -> bool:
+    """Return True when the normalized response originated from a HAL page with `next`."""
+    return isinstance(data, dict) and bool(data.get(HAL_HAS_NEXT_KEY))
 
 
 def build_filters(filters: dict) -> dict:

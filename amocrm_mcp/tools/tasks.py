@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from amocrm_mcp.client import AmoAPIError, build_filters, error_response, success_response
+from amocrm_mcp.client import AmoAPIError, build_filters, error_response, has_next_page, success_response
 from amocrm_mcp.models.schemas import (
     TasksCreateInput,
     TasksGetInput,
@@ -77,7 +77,7 @@ async def tasks_list(input: TasksListInput) -> dict:
         tasks = data.get("tasks", [])
         pagination = {
             "current_page": input.page,
-            "has_next": "next" in data if isinstance(data, dict) else False,
+            "has_next": has_next_page(data),
         }
         return success_response(tasks, pagination)
 

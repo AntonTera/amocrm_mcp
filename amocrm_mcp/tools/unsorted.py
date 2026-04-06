@@ -6,7 +6,7 @@ Reject declines an unsorted lead via DELETE /decline.
 
 from __future__ import annotations
 
-from amocrm_mcp.client import AmoAPIError, error_response, success_response
+from amocrm_mcp.client import AmoAPIError, error_response, has_next_page, success_response
 from amocrm_mcp.models.schemas import (
     UnsortedAcceptInput,
     UnsortedListInput,
@@ -35,7 +35,7 @@ async def unsorted_list(input: UnsortedListInput) -> dict:
         unsorted = data.get("unsorted", [])
         pagination = {
             "current_page": input.page,
-            "has_next": "next" in data if isinstance(data, dict) else False,
+            "has_next": has_next_page(data),
         }
         return success_response(unsorted, pagination)
 

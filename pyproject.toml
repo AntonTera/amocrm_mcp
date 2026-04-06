@@ -28,6 +28,7 @@ dependencies = [
 
 [project.scripts]
 amocrm-mcp = "amocrm_mcp.server:main"
+amocrm-concierge-backfill = "amocrm_mcp.concierge_backfill:main"
 
 [tool.setuptools.packages.find]
 include = ["amocrm_mcp*"]

@@ -6,7 +6,7 @@ Notes are scoped to entity_type and entity_id via path:
 
 from __future__ import annotations
 
-from amocrm_mcp.client import AmoAPIError, error_response, success_response
+from amocrm_mcp.client import AmoAPIError, error_response, has_next_page, success_response
 from amocrm_mcp.models.schemas import NotesCreateInput, NotesListInput
 from amocrm_mcp.server import execute_tool, mcp
 
@@ -49,7 +49,7 @@ async def notes_list(input: NotesListInput) -> dict:
         notes = data.get("notes", [])
         pagination = {
             "current_page": input.page,
-            "has_next": "next" in data if isinstance(data, dict) else False,
+            "has_next": has_next_page(data),
         }
         return success_response(notes, pagination)
 
