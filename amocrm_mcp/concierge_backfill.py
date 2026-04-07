@@ -229,6 +229,7 @@ def build_report(mode: str, from_date: date, to_date: date, from_ts: int, to_ts:
                 "posiflora_price_not_above_2500": 0,
                 "missing_order_date": 0,
                 "open_concierge": 0,
+                "closed_concierge": 0,
             },
             "contact_stop_tags": {tag: 0 for tag in STOP_TAGS},
             "selected_contacts_total": 0,
@@ -297,7 +298,7 @@ async def fetch_source_leads(client: AmoClient, from_ts: int, to_ts: int) -> tup
     return await fetch_collection(client, "/api/v4/leads", "leads", params=params)
 
 
-async def fetch_target_open_contact_ids(client: AmoClient) -> tuple[set[int], int]:
+async def fetch_target_contact_ids(client: AmoClient) -> tuple[set[int], set[int], int]:
     params = {
         "with": "contacts",
     }
@@ -309,17 +310,40 @@ async def fetch_target_open_contact_ids(client: AmoClient) -> tuple[set[int], in
         lead for lead in pipeline_leads
         if lead.get("status_id") not in {SUCCESS_STATUS_ID, FAILED_STATUS_ID}
     ]
+    closed_leads = [
+        lead for lead in pipeline_leads
+        if lead.get("status_id") in {SUCCESS_STATUS_ID, FAILED_STATUS_ID}
+    ]
 
-    contact_ids: set[int] = set()
+    open_contact_ids: set[int] = set()
     for lead in open_leads:
         contacts = lead.get("contacts")
         if not isinstance(contacts, list):
             continue
         for contact in contacts:
             if isinstance(contact, dict) and isinstance(contact.get("id"), int):
-                contact_ids.add(contact["id"])
+                open_contact_ids.add(contact["id"])
 
-    return contact_ids, pages
+    closed_contact_ids: set[int] = set()
+    for lead in closed_leads:
+        contacts = lead.get("contacts")
+        if not isinstance(contacts, list):
+            continue
+        for contact in contacts:
+            if isinstance(contact, dict) and isinstance(contact.get("id"), int):
+                closed_contact_ids.add(contact["id"])
+
+    return open_contact_ids, closed_contact_ids, pages
+
+
+async def fetch_target_open_contact_ids(client: AmoClient) -> tuple[set[int], int]:
+    open_contact_ids, _, pages = await fetch_target_contact_ids(client)
+    return open_contact_ids, pages
+
+
+async def fetch_target_closed_contact_ids(client: AmoClient) -> tuple[set[int], int]:
+    _, closed_contact_ids, pages = await fetch_target_contact_ids(client)
+    return closed_contact_ids, pages
 
 
 async def fetch_contact(client: AmoClient, contact_id: int) -> dict[str, Any]:
@@ -442,6 +466,7 @@ async def evaluate_candidates(
     report: dict[str, Any],
     selected_candidates: dict[int, CandidateLead],
     open_target_contact_ids: set[int],
+    closed_target_contact_ids: set[int],
 ) -> list[tuple[CandidateLead, list[dict[str, Any]], bool]]:
     ready: list[tuple[CandidateLead, list[dict[str, Any]], bool]] = []
     summary = report["summary"]
@@ -475,6 +500,10 @@ async def evaluate_candidates(
         if candidate.contact_id in open_target_contact_ids:
             blockers.append("open_concierge")
             summary["skipped"]["open_concierge"] += 1
+
+        if candidate.contact_id in closed_target_contact_ids:
+            blockers.append("closed_concierge")
+            summary["skipped"]["closed_concierge"] += 1
 
         if blockers:
             report["skipped"].append(build_record(
@@ -525,14 +554,15 @@ async def run_backfill(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         report["summary"]["successful_leads_total"] = len(successful_leads)
 
         selected_candidates = select_source_candidates(report, successful_leads)
-        open_target_contact_ids, open_target_pages = await fetch_target_open_contact_ids(client)
-        report["pages"]["target_open_leads"] = open_target_pages
+        open_target_contact_ids, closed_target_contact_ids, target_pipeline_pages = await fetch_target_contact_ids(client)
+        report["pages"]["target_open_leads"] = target_pipeline_pages
 
         ready_candidates = await evaluate_candidates(
             client,
             report,
             selected_candidates,
             open_target_contact_ids,
+            closed_target_contact_ids,
         )
 
         if mode == "dry-run":

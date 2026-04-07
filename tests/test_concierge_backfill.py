@@ -12,6 +12,7 @@ from amocrm_mcp.concierge_backfill import (
     build_target_custom_fields,
     evaluate_candidates,
     fetch_collection,
+    fetch_target_closed_contact_ids,
     fetch_target_open_contact_ids,
     select_source_candidates,
 )
@@ -127,11 +128,42 @@ class ConciergeBackfillTests(unittest.IsolatedAsyncioTestCase):
                 report=report,
                 selected_candidates={candidate.contact_id: candidate},
                 open_target_contact_ids={candidate.contact_id},
+                closed_target_contact_ids=set(),
             )
 
         self.assertEqual(ready, [])
         self.assertEqual(report["summary"]["contact_stop_tags"]["Не звонить"], 1)
         self.assertEqual(report["summary"]["skipped"]["open_concierge"], 1)
+        self.assertEqual(report["skipped"][0]["reason"], "contact_blocked")
+
+    async def test_evaluate_candidates_blocks_closed_target_contacts(self) -> None:
+        report = self.make_report()
+        candidate = CandidateLead(
+            lead_id=21,
+            contact_id=778,
+            source_tag="amocrm",
+            closed_at=301,
+            price=4100,
+            tag_names=["amoCRM"],
+            custom_fields_values=[
+                {"field_id": ORDER_DATE_FIELD_ID, "values": [{"value": "2026-03-04"}]},
+            ],
+        )
+
+        with patch(
+            "amocrm_mcp.concierge_backfill.fetch_contact",
+            new=AsyncMock(return_value={"tags": []}),
+        ):
+            ready = await evaluate_candidates(
+                client=None,
+                report=report,
+                selected_candidates={candidate.contact_id: candidate},
+                open_target_contact_ids=set(),
+                closed_target_contact_ids={candidate.contact_id},
+            )
+
+        self.assertEqual(ready, [])
+        self.assertEqual(report["summary"]["skipped"]["closed_concierge"], 1)
         self.assertEqual(report["skipped"][0]["reason"], "contact_blocked")
 
     async def test_fetch_target_open_contact_ids_filters_closed_statuses_locally(self) -> None:
@@ -149,6 +181,23 @@ class ConciergeBackfillTests(unittest.IsolatedAsyncioTestCase):
         contact_ids, pages = await fetch_target_open_contact_ids(client)
 
         self.assertEqual(contact_ids, {101})
+        self.assertEqual(pages, 1)
+
+    async def test_fetch_target_closed_contact_ids_collects_only_closed_statuses(self) -> None:
+        client = FakeClient([
+            {
+                "leads": [
+                    {"id": 1, "status_id": 83334610, "contacts": [{"id": 101}]},
+                    {"id": 2, "status_id": 142, "contacts": [{"id": 202}]},
+                    {"id": 3, "status_id": 143, "contacts": [{"id": 303}]},
+                ],
+            },
+            {"leads": []},
+        ])
+
+        contact_ids, pages = await fetch_target_closed_contact_ids(client)
+
+        self.assertEqual(contact_ids, {202, 303})
         self.assertEqual(pages, 1)
 
 
